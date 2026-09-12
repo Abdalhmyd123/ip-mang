@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Manager</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: rgb(2, 25, 55);
+            min-height: 100vh;
+            color: #fff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 40px 20px;
+        }
+        h1 { color: #fff; margin-bottom: 10px; font-weight: 400; letter-spacing: 1px; }
+        .root { color: #fff; width: 100%; max-width: 420px; }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 15px 0;
+            border: 2px solid #123;
+            border-radius: 12px;
+            padding: 4px 4px 4px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.6);
+            color: #fff;
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .input-wrapper.has-result {
+            border-color: #3b8c6e;
+            box-shadow: 0 0 20px rgba(59, 140, 110, 0.3);
+        }
+        .input-wrapper input {
+            flex: 1;
+            padding: 12px 0;
+            background: transparent;
+            color: #fff;
+            font-size: 18px;
+            border: none;
+            outline: none;
+            min-width: 0;
+        }
+        .input-wrapper input::placeholder { color: rgba(255, 255, 255, 0.4); }
+        .input-wrapper .status-icon { font-size: 20px; width: 32px; text-align: center; }
+        .input-wrapper .clear-btn {
+            font-size: 18px; cursor: pointer; opacity: 0.6;
+            padding: 4px 8px; transition: 0.2s; user-select: none;
+        }
+        .input-wrapper .clear-btn:hover { opacity: 1; }
+
+        .search-result {
+            position: absolute;
+            top: 100%; right: 0;
+            margin-top: 8px;
+            background: rgba(20, 35, 55, 0.98);
+            border: 1px solid #3b8c6e;
+            border-radius: 12px;
+            padding: 0 16px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.8);
+            opacity: 0;
+            transform: translateY(-10px) scale(0.95);
+            pointer-events: none;
+            transition: opacity 0.25s, transform 0.25s;
+            z-index: 100;
+            max-height: 0;
+            overflow: hidden;
+            min-width: 220px;
+            width: auto;
+        }
+        .search-result.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+            max-height: 550px;
+            padding: 16px;
+        }
+        .search-result .result-ip {
+            font-size: 22px; font-weight: bold; color: #7ecf9c;
+            margin-bottom: 6px; text-align: center;
+        }
+        .search-result .result-detail {
+            font-size: 14px; color: #b0d4ff;
+            padding: 4px 8px; margin: 3px 0;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            display: flex; justify-content: space-between;
+            align-items: center; gap: 12px;
+        }
+        .search-result .result-detail .label { color: #88aacc; font-weight: 300; }
+        .search-result .result-detail .value { color: #fff; font-weight: 500; }
+        .search-result .result-delete-btn {
+            width: 100%; margin-top: 10px;
+            padding: 8px 16px;
+            background: #8b2d2d; border: none; border-radius: 40px;
+            color: #fff; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: 0.2s;
+        }
+        .search-result .result-delete-btn:hover { background: #a13a3a; }
+
+        .counter-box {
+            width: 70px; text-align: center;
+            font-size: 18px; font-weight: bold;
+            padding: 10px 0; border-radius: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            color: #ffffff; flex-shrink: 0;
+        }
+
+        .button-group {
+            display: flex; flex-wrap: wrap; gap: 10px;
+            margin: 16px 0 12px; justify-content: center;
+        }
+        .button-group button {
+            flex: 1 0 auto;
+            padding: 12px 18px;
+            font-size: 16px; font-weight: 600;
+            cursor: pointer; border: none; border-radius: 40px;
+            transition: 0.25s;
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.5);
+            min-width: 80px;
+        }
+        .button-group button:nth-child(1) { background: linear-gradient(145deg, #2d6a4f, #409f7a); color: white; }
+        .button-group button:nth-child(2) { background: rgba(255, 255, 255, 0.08); color: #fff; border: 1px solid rgba(255, 255, 255, 0.15); }
+        .button-group button:nth-child(3) { background: rgba(255, 255, 255, 0.06); color: #fff; border: 1px solid rgba(255, 255, 255, 0.1); }
+        .button-group button:active { transform: scale(0.96); }
+
+        ul {
+            list-style: none; padding: 0; margin: 20px 0 10px;
+            width: 100%; max-height: 500px; overflow-y: auto;
+        }
+        ul::-webkit-scrollbar { width: 6px; }
+        ul::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.05); border-radius: 10px; }
+        ul::-webkit-scrollbar-thumb { background: #2d6a4f; border-radius: 10px; }
+
+        li {
+            padding: 14px 16px; margin: 8px 0;
+            border-radius: 14px;
+            display: flex; flex-direction: column; gap: 6px;
+            position: relative;
+            transition: transform 0.2s, border-color 0.3s;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            min-height: 58px;
+            cursor: pointer;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            overflow: hidden;
+            contain: layout style;
+        }
+        li:hover { transform: scale(1.01); border-color: rgba(255, 255, 255, 0.2); }
+
+        .timer-bar {
+            position: absolute; bottom: 0; left: 0;
+            height: 4px; border-radius: 0 0 14px 14px;
+            transition: width 1s linear;
+            z-index: 1;
+            will-change: width;
+        }
+        li .ip-main {
+            display: flex; justify-content: space-between;
+            align-items: center; width: 100%;
+            position: relative; z-index: 2;
+        }
+        li .ip-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        li .ip-number {
+            font-weight: 600; font-size: 18px; letter-spacing: 0.5px;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+        }
+        li .completed-tag { font-size: 14px; color: #7ecf9c; font-weight: 600; }
+        li .note-text {
+            font-size: 14px; color: #b0d4ff;
+            background: rgba(0, 100, 200, 0.15);
+            padding: 2px 12px; border-radius: 30px;
+            white-space: nowrap; max-width: 120px;
+            overflow: hidden; text-overflow: ellipsis;
+        }
+        li .timestamp-text { font-size: 12px; color: rgba(255,255,255,0.6); }
+        .completed .ip-number { text-decoration: line-through; color: rgba(255,255,255,0.5); }
+
+        .item-timer {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 14px; font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 12px; border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            width: fit-content;
+            position: relative; z-index: 2;
+        }
+        .item-timer .timer-controls { display: flex; gap: 4px; }
+        .item-timer .timer-controls button {
+            background: transparent; border: none;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer; font-size: 14px;
+            padding: 2px 6px; border-radius: 50%;
+            transition: 0.2s;
+        }
+        .item-timer .timer-controls button:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+        .item-timer .timer-controls .stop-timer-btn { color: #ff6b6b; }
+        .item-timer .timer-controls .stop-timer-btn:hover { background: rgba(255, 0, 0, 0.2); }
+
+        .list-actions {
+            display: flex; gap: 6px; align-items: center;
+            opacity: 0.6; transition: opacity 0.3s;
+            position: relative; z-index: 2;
+        }
+        .list-actions:hover { opacity: 1; }
+        .list-actions button {
+            background: transparent; border: none;
+            color: rgba(255,255,255,0.6);
+            cursor: pointer; font-size: 18px;
+            padding: 4px 8px; border-radius: 50%;
+            transition: 0.2s;
+        }
+        .list-actions .delete-btn { color: #ff6b6b; }
+        .list-actions .delete-btn:hover { background: rgba(255, 0, 0, 0.2); }
+        .list-actions .note-btn { color: #74b9ff; }
+        .list-actions .note-btn:hover { background: rgba(0, 100, 200, 0.2); }
+        .list-actions .complete-btn { color: #7ecf9c; }
+        .list-actions .complete-btn:hover { background: rgba(0, 200, 0, 0.2); }
+
+        .note-modal {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex; justify-content: center; align-items: center;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s;
+            z-index: 999;
+        }
+        .note-modal.show { opacity: 1; pointer-events: auto; }
+        .note-modal-content {
+            background: #1c2a3a;
+            padding: 28px 24px; border-radius: 24px;
+            text-align: center; width: 90%; max-width: 340px;
+            border: 1px solid #3b8c6e;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.8);
+        }
+        .note-modal-content h3 { margin-bottom: 16px; color: #c3e2ff; font-weight: 400; }
+        .note-modal-content input {
+            width: 100%; padding: 12px 14px;
+            border-radius: 40px; border: 1px solid #3b8c6e;
+            background: #0f1a24; color: #fff;
+            font-size: 16px; outline: none; text-align: center;
+        }
+        .note-modal-content input:focus {
+            border-color: #5fb38b;
+            box-shadow: 0 0 0 3px rgba(70, 180, 130, 0.3);
+        }
+        .note-modal-actions {
+            display: flex; gap: 16px;
+            justify-content: center; margin-top: 20px; flex-wrap: wrap;
+        }
+        .note-modal-actions button {
+            padding: 10px 28px; border: none; border-radius: 40px;
+            font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: 0.2s; min-width: 80px;
+        }
+        .save-note-btn { background: #2b7a4b; color: #fff; }
+        .save-note-btn:hover { background: #3a9b62; }
+        .cancel-note-btn { background: #7a3a3a; color: #fff; }
+        .cancel-note-btn:hover { background: #a14a4a; }
+
+        .error { color: #ff7a7a; margin: 6px 0 4px; font-size: 15px; min-height: 24px; }
+        .hidden { display: none !important; }
+
+        footer {
+            margin-top: 40px; font-size: 13px;
+            color: #6a7f94; text-align: center;
+            border-top: 1px solid #2a3a4a;
+            padding-top: 24px; width: 100%; max-width: 400px;
+        }
+
+        .custom-alert-overlay {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex; justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+        .custom-alert {
+            background: linear-gradient(145deg, #1a2a3a, #2a3a4a);
+            padding: 30px 35px; border-radius: 24px;
+            text-align: center; max-width: 380px; width: 90%;
+            border: 2px solid transparent;
+            box-shadow: 0 0 40px rgba(255, 100, 50, 0.3);
+        }
+        .custom-alert .alert-icon { font-size: 48px; margin-bottom: 10px; display: block; }
+        .custom-alert .alert-title {
+            font-size: 22px; font-weight: 700;
+            color: #ff8a5c; margin-bottom: 8px;
+        }
+        .custom-alert .alert-message { font-size: 16px; color: #b0d4ff; margin-bottom: 20px; line-height: 1.6; }
+        .custom-alert .alert-ip {
+            font-size: 28px; font-weight: bold; color: #7ecf9c;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 16px; border-radius: 12px;
+            display: inline-block; margin-bottom: 12px;
+        }
+        .custom-alert .alert-btn {
+            padding: 10px 32px;
+            background: linear-gradient(145deg, #2d6a4f, #409f7a);
+            border: none; border-radius: 40px;
+            color: #fff; font-size: 16px; font-weight: 600;
+            cursor: pointer; transition: 0.3s;
+        }
+        .custom-alert .alert-btn:hover { transform: scale(1.05); }
+        .custom-alert .alert-time {
+            font-size: 14px; color: #88aacc;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 10px;
+        }
+
+        /* حالة الاتصال بـ Firebase */
+        .sync-status {
+            position: fixed; top: 10px; left: 10px;
+            font-size: 12px; padding: 4px 10px;
+            border-radius: 20px; background: rgba(0,0,0,0.5);
+            color: #88aacc; z-index: 2000;
+            display: flex; align-items: center; gap: 6px;
+        }
+        .sync-status .dot {
+            width: 8px; height: 8px; border-radius: 50%;
+            background: #ff6b6b; transition: background 0.3s;
+        }
+        .sync-status.online .dot { background: #7ecf9c; }
+        .sync-status.syncing .dot { background: #ffb84d; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        @media (max-width: 480px) {
+            .button-group button { font-size: 14px; padding: 10px 12px; min-width: 70px; }
+            .input-wrapper input { font-size: 16px; }
+            .counter-box { width: 60px; font-size: 16px; }
+            li .ip-left { flex-wrap: wrap; }
+            .item-timer { font-size: 12px; padding: 2px 8px; }
+            .search-result { min-width: 150px; right: -10px; }
+            .search-result .result-detail { font-size: 12px; flex-direction: column; align-items: flex-start; gap: 2px; }
+            .custom-alert { padding: 22px 20px; }
+            .custom-alert .alert-title { font-size: 18px; }
+            .custom-alert .alert-ip { font-size: 22px; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- مؤشر حالة المزامنة -->
+    <div class="sync-status" id="syncStatus">
+        <span class="dot"></span>
+        <span id="syncText">جاري الاتصال...</span>
+    </div>
+
+    <h1>IP Manager</h1>
+
+    <div class="root">
+        <div class="input-wrapper" id="inputWrapper">
+            <input type="text" id="numberInput" placeholder="أدخل IP (2-3 خانات)" maxlength="3" inputmode="numeric">
+            <span class="status-icon" id="statusIcon"></span>
+            <span class="clear-btn" id="clearInput">✕</span>
+            <div class="counter-box" id="groupCounter">0</div>
+
+            <div class="search-result" id="searchResult">
+                <div class="result-ip" id="resultIp">--</div>
+                <div class="result-detail"><span class="label">📌 الحالة:</span><span class="value" id="resultStatus">--</span></div>
+                <div class="result-detail"><span class="label">📝 الملاحظة:</span><span class="value" id="resultNote">--</span></div>
+                <div class="result-detail"><span class="label">⏰ وقت الإضافة:</span><span class="value" id="resultTime">--</span></div>
+                <div class="result-detail"><span class="label">⏱️ الوقت المتبقي:</span><span class="value" id="resultTimer">--</span></div>
+                <button class="result-delete-btn" id="resultDeleteBtn">🗑️ حذف هذا الـ IP</button>
+            </div>
+        </div>
+        <div id="errorMsg" class="error hidden"></div>
+
+        <div class="button-group">
+            <button id="addBtn">➕ إضافة</button>
+            <button id="searchBtn">🔍 بحث</button>
+            <button id="reloadBtn">🔄 إعادة تحميل</button>
+        </div>
+
+        <ul id="numberList"></ul>
+
+        <div id="noteModal" class="note-modal">
+            <div class="note-modal-content">
+                <h3>📝 إضافة ملاحظة لـ <span id="noteIpDisplay">IP</span></h3>
+                <input type="text" id="noteInput" placeholder="اكتب ملاحظة..." maxlength="30">
+                <div class="note-modal-actions">
+                    <button class="save-note-btn" id="saveNoteBtn">💾 حفظ</button>
+                    <button class="cancel-note-btn" id="cancelNoteBtn">❌ إلغاء</button>
+                </div>
+            </div>
+        </div>
+
+        <footer>copypeast@Abdalhmydawad</footer>
+    </div>
+
+    <!-- Firebase SDK (compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+    <script>
+    (function() {
+        "use strict";
+
+        // ============================================================
+        // 1) إعداد Firebase (استبدل القيم ببيانات مشروعك)
+        // ============================================================
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        let db = null;
+        let firebaseReady = false;
+        let unsubscribeSnapshot = null;
+
+        const syncStatus = document.getElementById('syncStatus');
+        const syncText   = document.getElementById('syncText');
+
+        function setSyncState(state, text) {
+            syncStatus.classList.remove('online', 'syncing');
+            if (state) syncStatus.classList.add(state);
+            syncText.textContent = text;
+        }
+
+        try {
+            firebase.initializeApp(firebaseConfig);
+            db = firebase.firestore();
+            firebaseReady = true;
+            setSyncState('syncing', 'متصل - جاري المزامنة');
+        } catch (e) {
+            console.error('Firebase init error:', e);
+            setSyncState(null, 'وضع محلي (Firebase غير مهيأ)');
+        }
+
+        // مرجع المجموعة في Firestore
+        const COLLECTION = 'ip_manager';
+        const DOC_ID = 'shared_state';
+
+        // ============================================================
+        // 2) عناصر DOM
+        // ============================================================
+        const numberList    = document.getElementById('numberList');
+        const numberInput   = document.getElementById('numberInput');
+        const errorMsg      = document.getElementById('errorMsg');
+        const statusIcon    = document.getElementById('statusIcon');
+        const inputWrapper  = document.getElementById('inputWrapper');
+        const searchResult  = document.getElementById('searchResult');
+        const resultIp      = document.getElementById('resultIp');
+        const resultStatus  = document.getElementById('resultStatus');
+        const resultNote    = document.getElementById('resultNote');
+        const resultTime    = document.getElementById('resultTime');
+        const resultTimer   = document.getElementById('resultTimer');
+        const resultDeleteBtn = document.getElementById('resultDeleteBtn');
+        const groupCounter  = document.getElementById('groupCounter');
+        const clearInput    = document.getElementById('clearInput');
+
+        const TIMER_DURATION = 7200; // ثانيتين (كما في الكود الأصلي - على الأرجح تقصد ساعتين = 7200)
+
+        let numbers = [];
+        let timers = {};
+        let editingIp = null;
+        let currentSearchIp = null;
+
+        // ============================================================
+        // 3) المؤقت المركزي
+        // ============================================================
+        let masterInterval = null;
+
+        function startMasterTimer() {
+            if (masterInterval) return;
+            masterInterval = setInterval(masterTick, 1000);
+        }
+        function stopMasterTimer() {
+            if (masterInterval) {
+                clearInterval(masterInterval);
+                masterInterval = null;
+            }
+        }
+        function hasAnyRunning() {
+            for (const ip in timers) if (timers[ip].isRunning) return true;
+            return false;
+        }
+
+        function masterTick() {
+            const now = Date.now();
+            let needsRender = false;
+            let anyRunning = false;
+
+            for (const ip in timers) {
+                const t = timers[ip];
+                if (!t.isRunning) continue;
+                anyRunning = true;
+
+                const elapsed = Math.floor((now - t.startTime) / 1000);
+                const remaining = Math.max(0, t.duration - elapsed);
+
+                if (remaining !== t.pausedSeconds) {
+                    t.pausedSeconds = remaining;
+                }
+
+                if (remaining === 0) {
+                    t.isRunning = false;
+                    onTimerComplete(ip);
+                    needsRender = true;
+                }
+            }
+
+            updateTimersUI();
+            updateSearchResultTimer();
+
+            if (!anyRunning) stopMasterTimer();
+            if (needsRender) scheduleSave();
+        }
+
+        function getRemaining(ip) {
+            const t = timers[ip];
+            if (!t) return TIMER_DURATION;
+            if (!t.isRunning) return t.pausedSeconds ?? TIMER_DURATION;
+            const elapsed = Math.floor((Date.now() - t.startTime) / 1000);
+            return Math.max(0, t.duration - elapsed);
+        }
+
+        function formatTime(seconds) {
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = seconds % 60;
+            return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        }
+
+        function getTimerColor(seconds) {
+            const ratio = seconds / TIMER_DURATION;
+            if (ratio > 0.5) {
+                const p = (ratio - 0.5) * 2;
+                const r = Math.round(50 + 205 * (1 - p));
+                const g = Math.round(200 + 55 * p);
+                return `rgb(${r}, ${g}, 80)`;
+            } else {
+                const p = ratio * 2;
+                const g = Math.round(200 - 150 * (1 - p));
+                const b = Math.round(80 - 60 * (1 - p));
+                return `rgb(255, ${g}, ${b})`;
+            }
+        }
+
+        function getBackgroundColor(seconds) {
+            const ratio = seconds / TIMER_DURATION;
+            if (ratio > 0.6) return 'rgba(45, 106, 79, 0.25)';
+            if (ratio > 0.3) return 'rgba(200, 140, 50, 0.25)';
+            return 'rgba(200, 60, 60, 0.25)';
+        }
+
+        // ============================================================
+        // 4) الحفظ (محلي + Firebase)
+        // ============================================================
+        let saveScheduled = false;
+        let firebaseSaveScheduled = false;
+
+        function scheduleSave() {
+            if (saveScheduled) return;
+            saveScheduled = true;
+            setTimeout(() => {
+                persistLocal();
+                scheduleFirebaseSave();
+                saveScheduled = false;
+            }, 5000);
+        }
+
+        function saveImmediate() {
+            persistLocal();
+            scheduleFirebaseSave(true);
+        }
+
+        function persistLocal() {
+            localStorage.setItem('savedNumbers', JSON.stringify(numbers));
+            const timersData = {};
+            for (const ip in timers) {
+                const t = timers[ip];
+                timersData[ip] = {
+                    startTime: t.startTime,
+                    duration: t.duration,
+                    isRunning: t.isRunning,
+                    pausedSeconds: t.pausedSeconds
+                };
+            }
+            localStorage.setItem('timerStates', JSON.stringify(timersData));
+        }
+
+        // حفظ في Firebase (مع تأجيل بسيط لتقليل الطلبات)
+        function scheduleFirebaseSave(immediate = false) {
+            if (!firebaseReady || !db) return;
+            if (firebaseSaveScheduled && !immediate) return;
+            firebaseSaveScheduled = true;
+
+            const delay = immediate ? 0 : 1500;
+            setTimeout(async () => {
+                firebaseSaveScheduled = false;
+                try {
+                    setSyncState('syncing', 'جاري الحفظ...');
+                    const timersData = {};
+                    for (const ip in timers) {
+                        const t = timers[ip];
+                        timersData[ip] = {
+                            startTime: t.startTime,
+                            duration: t.duration,
+                            isRunning: t.isRunning,
+                            pausedSeconds: t.pausedSeconds
+                        };
+                    }
+                    await db.collection(COLLECTION).doc(DOC_ID).set({
+                        numbers: numbers,
+                        timers: timersData,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                    setSyncState('online', 'متزامن ✓');
+                } catch (e) {
+                    console.error('Firebase save error:', e);
+                    setSyncState(null, 'خطأ في المزامنة');
+                }
+            }, delay);
+        }
+
+        // ============================================================
+        // 5) الاشتراك اللحظي في Firebase (Realtime)
+        // ============================================================
+        function subscribeFirebase() {
+            if (!firebaseReady || !db) return;
+            if (unsubscribeSnapshot) unsubscribeSnapshot();
+
+            unsubscribeSnapshot = db.collection(COLLECTION).doc(DOC_ID)
+                .onSnapshot((doc) => {
+                    if (!doc.exists) {
+                        // أول مرة: ارفع البيانات المحلية إن وجدت
+                        if (numbers.length > 0) {
+                            scheduleFirebaseSave(true);
+                        }
+                        setSyncState('online', 'متزامن ✓');
+                        return;
+                    }
+                    const data = doc.data() || {};
+
+                    // تحديث القائمة
+                    if (Array.isArray(data.numbers)) {
+                        numbers = data.numbers.map(item => ({
+                            number: item.number,
+                            completed: !!item.completed,
+                            note: item.note || "",
+                            timestamp: item.timestamp || '--:--'
+                        }));
+                    }
+
+                    // تحديث المؤقتات
+                    if (data.timers && typeof data.timers === 'object') {
+                        timers = {};
+                        for (const ip in data.timers) {
+                            const st = data.timers[ip];
+                            timers[ip] = {
+                                startTime: st.startTime || Date.now(),
+                                duration: st.duration || TIMER_DURATION,
+                                isRunning: !!st.isRunning,
+                                pausedSeconds: st.pausedSeconds ?? st.duration ?? TIMER_DURATION
+                            };
+                        }
+                    }
+
+                    // ضمان وجود timer لكل IP
+                    numbers.forEach(item => {
+                        if (!timers[item.number]) {
+                            timers[item.number] = {
+                                startTime: Date.now(),
+                                duration: TIMER_DURATION,
+                                isRunning: !item.completed,
+                                pausedSeconds: TIMER_DURATION
+                            };
+                        }
+                    });
+
+                    renderList();
+                    if (hasAnyRunning()) startMasterTimer();
+                    if (currentSearchIp) showSearchResult(currentSearchIp);
+                    setSyncState('online', 'متزامن ✓');
+                }, (err) => {
+                    console.error('Firebase snapshot error:', err);
+                    setSyncState(null, 'انقطع الاتصال');
+                });
+        }
+
+        // ============================================================
+        // 6) التنبيه
+        // ============================================================
+        function showCustomAlert(ip) {
+            const overlay = document.createElement('div');
+            overlay.className = 'custom-alert-overlay';
+            overlay.innerHTML = `
+                <div class="custom-alert">
+                    <span class="alert-icon">⏰</span>
+                    <div class="alert-title">انتهى الوقت!</div>
+                    <div class="alert-ip">${ip}</div>
+                    <div class="alert-message">✅ تم إنجاز المهمة</div>
+                    <button class="alert-btn">✓ تم التنبيه</button>
+                    <div class="alert-time">🕐 تم التنبيه: ${new Date().toLocaleTimeString('ar-EG')}</div>
+                </div>`;
+            document.body.appendChild(overlay);
+            const close = () => overlay.remove();
+            overlay.querySelector('.alert-btn').addEventListener('click', close);
+            overlay.addEventListener('click', e => { if (e.target === overlay) close(); });
+            setTimeout(() => { if (document.body.contains(overlay)) overlay.remove(); }, 10000);
+        }
+
+        function onTimerComplete(ip) {
+            const item = numbers.find(n => n.number === ip);
+            if (item && !item.completed) {
+                item.completed = true;
+                renderList();
+                saveImmediate();
+            }
+            showCustomAlert(ip);
+        }
+
+        // ============================================================
+        // 7) التحميل الأولي
+        // ============================================================
+        window.addEventListener('load', () => {
+            // تحميل محلي أولاً (سريع)
+            try {
+                const saved = JSON.parse(localStorage.getItem('savedNumbers') || '[]');
+                numbers = saved.map(item => ({
+                    number: item.number,
+                    completed: !!item.completed,
+                    note: item.note || "",
+                    timestamp: item.timestamp || new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'})
+                }));
+            } catch(e) { numbers = []; }
+
+            try {
+                const savedTimers = JSON.parse(localStorage.getItem('timerStates') || '{}');
+                for (const ip in savedTimers) {
+                    const st = savedTimers[ip];
+                    timers[ip] = {
+                        startTime: st.startTime || Date.now(),
+                        duration: st.duration || TIMER_DURATION,
+                        isRunning: !!st.isRunning,
+                        pausedSeconds: st.pausedSeconds ?? st.duration ?? TIMER_DURATION
+                    };
+                }
+            } catch(e) { timers = {}; }
+
+            numbers.forEach(item => {
+                if (!timers[item.number]) {
+                    timers[item.number] = {
+                        startTime: Date.now(),
+                        duration: TIMER_DURATION,
+                        isRunning: !item.completed,
+                        pausedSeconds: TIMER_DURATION
+                    };
+                }
+            });
+
+            renderList();
+            updateGroupCounter();
+            if (hasAnyRunning()) startMasterTimer();
+
+            // ثم الاشتراك في Firebase (سيحدّث البيانات إن وُجدت)
+            subscribeFirebase();
+        });
+
+        // ============================================================
+        // 8) تحديث الواجهة
+        // ============================================================
+        function updateTimersUI() {
+            const items = numberList.querySelectorAll('li[data-ip]');
+            items.forEach(li => {
+                const ip = li.dataset.ip;
+                const t = timers[ip];
+                if (!t || (t.isRunning === false && !li.querySelector('.item-timer'))) return;
+
+                const remaining = getRemaining(ip);
+                const timerEl = li.querySelector('.item-timer span');
+                if (timerEl) {
+                    const txt = formatTime(remaining);
+                    if (timerEl.textContent !== txt) {
+                        timerEl.textContent = txt;
+                        timerEl.style.color = getTimerColor(remaining);
+                    }
+                }
+                const bar = li.querySelector('.timer-bar');
+                if (bar) {
+                    const pct = (remaining / TIMER_DURATION) * 100;
+                    bar.style.width = pct + '%';
+                    bar.style.background = `linear-gradient(90deg, ${getTimerColor(remaining)}, ${getTimerColor(remaining * 0.7)})`;
+                }
+            });
+        }
+
+        function updateSearchResultTimer() {
+            if (!currentSearchIp) return;
+            const remaining = getRemaining(currentSearchIp);
+            const t = timers[currentSearchIp];
+            const prefix = t && t.isRunning ? '▶️' : '⏸️';
+            resultTimer.textContent = `${prefix} ${formatTime(remaining)}`;
+            resultTimer.style.color = getTimerColor(remaining);
+        }
+
+        // ============================================================
+        // 9) العمليات
+        // ============================================================
+        function isDuplicate(value) {
+            return numbers.some(item => item.number === value);
+        }
+
+        function addNumber() {
+            const value = numberInput.value.trim();
+            if (value.length < 2 || value.length > 3) {
+                errorMsg.textContent = "⚠️ يجب إدخال رقم من خانتين إلى ثلاث خانات فقط";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+            if (isDuplicate(value)) {
+                errorMsg.textContent = "⚠️ هذا الـ IP موجود بالفعل";
+                errorMsg.classList.remove('hidden');
+                return;
+            }
+
+            const timeStr = new Date().toLocaleTimeString('ar-EG', {hour:'2-digit', minute:'2-digit'});
+            numbers.push({ number: value, completed: false, note: "", timestamp: timeStr });
+
+            timers[value] = {
+                startTime: Date.now(),
+                duration: TIMER_DURATION,
+                isRunning: true,
+                pausedSeconds: TIMER_DURATION
+            };
+
+            startMasterTimer();
+            saveImmediate();
+            renderList();
+            numberInput.value = '';
+            numberInput.focus();
+            errorMsg.classList.add('hidden');
+            statusIcon.textContent = '';
+            hideSearchResult();
+        }
+
+        function stopTimer(ip) {
+            const t = timers[ip];
+            if (!t || !t.isRunning) return;
+            t.pausedSeconds = getRemaining(ip);
+            t.isRunning = false;
+            renderList();
+            saveImmediate();
+            if (!hasAnyRunning()) stopMasterTimer();
+        }
+
+        function resetTimer(ip) {
+            const t = timers[ip];
+            if (!t) return;
+            t.startTime = Date.now();
+            t.duration = TIMER_DURATION;
+            t.isRunning = true;
+            t.pausedSeconds = TIMER_DURATION;
+
+            const item = numbers.find(n => n.number === ip);
+            if (item) item.completed = false;
+
+            startMasterTimer();
+            renderList();
+            saveImmediate();
+            updateSearchResultTimer();
+        }
+
+        function completeTask(ip) {
+            const item = numbers.find(n => n.number === ip);
+            if (!item || item.completed) return;
+            item.completed = true;
+            if (timers[ip]) {
+                timers[ip].pausedSeconds = getRemaining(ip);
+                timers[ip].isRunning = false;
+            }
+            renderList();
+            saveImmediate();
+            if (!hasAnyRunning()) stopMasterTimer();
+            if (currentSearchIp === ip) showSearchResult(ip);
+        }
+
+        function deleteIp(ip) {
+            if (!ip) return;
+            if (!confirm(`⚠️ هل تريد حذف الـ IP "${ip}" نهائياً؟`)) return;
+            delete timers[ip];
+            numbers = numbers.filter(n => n.number !== ip);
+            renderList();
+            saveImmediate();
+            if (numberInput.value.trim() === ip) {
+                hideSearchResult();
+                statusIcon.textContent = '';
+            }
+            if (!hasAnyRunning()) stopMasterTimer();
+        }
+
+        // ============================================================
+        // 10) القائمة
+        // ============================================================
+        function renderList() {
+            const sorted = [...numbers].sort((a, b) => {
+                if (a.completed && !b.completed) return 1;
+                if (!a.completed && b.completed) return -1;
+                return getRemaining(a.number) - getRemaining(b.number);
+            });
+
+            const fragment = document.createDocumentFragment();
+
+            sorted.forEach(item => {
+                const li = document.createElement('li');
+                li.dataset.ip = item.number;
+
+                if (item.completed) {
+                    li.style.background = 'rgba(45, 106, 79, 0.2)';
+                    li.style.borderColor = '#2d6a4f';
+                    li.classList.add('completed');
+                } else if (timers[item.number]) {
+                    const secs = getRemaining(item.number);
+                    li.style.background = getBackgroundColor(secs);
+                    li.style.borderColor = getTimerColor(secs) + '44';
+                } else {
+                    li.style.background = 'rgba(255,255,255,0.06)';
+                }
+
+                // شريط المؤقت
+                const bar = document.createElement('div');
+                bar.className = 'timer-bar';
+                if (item.completed) {
+                    bar.style.width = '100%';
+                    bar.style.background = 'linear-gradient(90deg, #2d6a4f, #409f7a)';
+                } else {
+                    const secs = getRemaining(item.number);
+                    bar.style.width = (secs / TIMER_DURATION) * 100 + '%';
+                    bar.style.background = `linear-gradient(90deg, ${getTimerColor(secs)}, ${getTimerColor(secs * 0.7)})`;
+                }
+                li.appendChild(bar);
+
+                // الصف الرئيسي
+                const mainDiv = document.createElement('div');
+                mainDiv.className = 'ip-main';
+
+                const leftDiv = document.createElement('div');
+                leftDiv.className = 'ip-left';
+
+                const ipSpan = document.createElement('span');
+                ipSpan.className = 'ip-number';
+                ipSpan.textContent = item.number;
+                leftDiv.appendChild(ipSpan);
+
+                if (item.completed) {
+                    const doneTag = document.createElement('span');
+                    doneTag.className = 'completed-tag';
+                    doneTag.textContent = '✓ تم إنجاز المهمة';
+                    leftDiv.appendChild(doneTag);
+                }
+
+                const timeSpan = document.createElement('span');
+                timeSpan.className = 'timestamp-text';
+                timeSpan.textContent = item.timestamp || '--:--';
+                leftDiv.appendChild(timeSpan);
+
+                if (item.note && item.note.trim() !== '') {
+                    const noteSpan = document.createElement('span');
+                    noteSpan.className = 'note-text';
+                    noteSpan.textContent = `🔔 ${item.note}`;
+                    leftDiv.appendChild(noteSpan);
+                }
+
+                mainDiv.appendChild(leftDiv);
+
+                const actionsDiv = document.createElement('div');
+                actionsDiv.className = 'list-actions';
+
+                if (!item.completed) {
+                    const completeBtn = document.createElement('button');
+                    completeBtn.className = 'complete-btn';
+                    completeBtn.textContent = '✅';
+                    completeBtn.title = 'إكمال المهمة';
+                    completeBtn.dataset.action = 'complete';
+                    actionsDiv.appendChild(completeBtn);
+                }
+
+                const noteBtn = document.createElement('button');
+                noteBtn.className = 'note-btn';
+                noteBtn.textContent = '📝';
+                noteBtn.title = 'إضافة ملاحظة';
+                noteBtn.dataset.action = 'note';
+                actionsDiv.appendChild(noteBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.textContent = '🗑';
+                deleteBtn.title = 'حذف';
+                deleteBtn.dataset.action = 'delete';
+                actionsDiv.appendChild(deleteBtn);
+
+                mainDiv.appendChild(actionsDiv);
+                li.appendChild(mainDiv);
+
+                // المؤقت
+                if (!item.completed) {
+                    const secs = getRemaining(item.number);
+                    if (secs > 0 || (timers[item.number] && timers[item.number].pausedSeconds > 0)) {
+                        const timerDiv = document.createElement('div');
+                        timerDiv.className = 'item-timer';
+
+                        const timerDisplay = document.createElement('span');
+                        timerDisplay.textContent = formatTime(secs);
+                        timerDisplay.style.direction = 'ltr';
+                        timerDisplay.style.color = getTimerColor(secs);
+                        timerDisplay.style.fontWeight = 'bold';
+
+                        const controlsDiv = document.createElement('div');
+                        controlsDiv.className = 'timer-controls';
+
+                        const stopBtn = document.createElement('button');
+                        stopBtn.className = 'stop-timer-btn';
+                        stopBtn.textContent = '⏹';
+                        stopBtn.title = 'إيقاف المؤقت';
+                        stopBtn.dataset.action = 'stop';
+                        controlsDiv.appendChild(stopBtn);
+
+                        const resetBtn = document.createElement('button');
+                        resetBtn.textContent = '🔄';
+                        resetBtn.title = 'إعادة ضبط (ساعتين)';
+                        resetBtn.dataset.action = 'reset';
+                        controlsDiv.appendChild(resetBtn);
+
+                        timerDiv.appendChild(timerDisplay);
+                        timerDiv.appendChild(controlsDiv);
+                        li.appendChild(timerDiv);
+                    }
+                }
+
+                fragment.appendChild(li);
+            });
+
+            numberList.replaceChildren(fragment);
+            updateGroupCounter();
+        }
+
+        function updateGroupCounter() {
+            groupCounter.textContent = numbers.length;
+        }
+
+        // ============================================================
+        // 11) البحث
+        // ============================================================
+        function showSearchResult(ip) {
+            const item = numbers.find(n => n.number === ip);
+            if (!item) { hideSearchResult(); return; }
+
+            currentSearchIp = ip;
+            resultIp.textContent = item.number;
+            resultStatus.textContent = item.completed ? 'مكتمل ✅' : 'غير مكتمل ❌';
+            resultNote.textContent = item.note || 'لا توجد';
+            resultTime.textContent = item.timestamp || '--:--';
+
+            const remaining = getRemaining(ip);
+            const t = timers[ip];
+            const prefix = t && t.isRunning ? '▶️' : '⏸️';
+            resultTimer.textContent = `${prefix} ${formatTime(remaining)}`;
+            resultTimer.style.color = getTimerColor(remaining);
+
+            searchResult.classList.add('show');
+            inputWrapper.classList.add('has-result');
+        }
+
+        function hideSearchResult() {
+            searchResult.classList.remove('show');
+            inputWrapper.classList.remove('has-result');
+            currentSearchIp = null;
+        }
+
+        function autoSearch() {
+            const value = numberInput.value.trim();
+            if (value === '') {
+                hideSearchResult();
+                statusIcon.textContent = '';
+                return;
+            }
+            const found = numbers.find(item => item.number === value);
+            if (found) {
+                statusIcon.textContent = '✅';
+                statusIcon.style.color = '#7ecf9c';
+                showSearchResult(value);
+            } else {
+                statusIcon.textContent = '❌';
+                statusIcon.style.color = '#ff6b6b';
+                hideSearchResult();
+            }
+        }
+
+        // ============================================================
+        // 12) النافذة المنبثقة للملاحظة
+        // ============================================================
+        function openNoteModal(ip) {
+            editingIp = ip;
+            document.getElementById('noteIpDisplay').textContent = ip;
+            const item = numbers.find(n => n.number === ip);
+            document.getElementById('noteInput').value = item ? (item.note || '') : '';
+            document.getElementById('noteModal').classList.add('show');
+            setTimeout(() => document.getElementById('noteInput').focus(), 100);
+        }
+        function closeNoteModal() {
+            document.getElementById('noteModal').classList.remove('show');
+            document.getElementById('noteInput').value = '';
+            editingIp = null;
+        }
+        function saveNote() {
+            const note = document.getElementById('noteInput').value.trim();
+            if (editingIp) {
+                const item = numbers.find(n => n.number === editingIp);
+                if (item) {
+                    item.note = note;
+                    saveImmediate();
+                    renderList();
+                    if (numberInput.value.trim() === editingIp) showSearchResult(editingIp);
+                }
+            }
+            closeNoteModal();
+        }
+
+        // ============================================================
+        // 13) إعادة التحميل
+        // ============================================================
+        async function reloadPage() {
+            if (!confirm("⚠️ هل أنت متأكد أنك تريد حذف كل الـ IP وإعادة التحميل؟")) return;
+            stopMasterTimer();
+            timers = {};
+            numbers = [];
+            localStorage.removeItem('timerStates');
+            localStorage.removeItem('savedNumbers');
+            renderList();
+            numberInput.value = '';
+            statusIcon.textContent = '';
+            errorMsg.classList.add('hidden');
+            hideSearchResult();
+
+            // حذف من Firebase أيضاً
+            if (firebaseReady && db) {
+                try {
+                    setSyncState('syncing', 'جاري الحذف...');
+                    await db.collection(COLLECTION).doc(DOC_ID).set({
+                        numbers: [],
+                        timers: {},
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    setSyncState('online', 'تم الحذف ✓');
+                } catch (e) {
+                    console.error('Firebase reload error:', e);
+                    setSyncState(null, 'خطأ في الحذف');
+                }
+            }
+        }
+
+        // ============================================================
+        // 14) ربط الأحداث
+        // ============================================================
+        document.getElementById('addBtn').addEventListener('click', addNumber);
+        document.getElementById('searchBtn').addEventListener('click', () => {
+            const v = numberInput.value.trim();
+            if (v === '') return;
+            const found = numbers.find(item => item.number === v);
+            if (found) showSearchResult(v);
+        });
+        document.getElementById('reloadBtn').addEventListener('click', reloadPage);
+        clearInput.addEventListener('click', () => {
+            numberInput.value = '';
+            statusIcon.textContent = '';
+            errorMsg.classList.add('hidden');
+            hideSearchResult();
+            numberInput.focus();
+        });
+        numberInput.addEventListener('input', autoSearch);
+        numberInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); addNumber(); }
+        });
+        document.getElementById('saveNoteBtn').addEventListener('click', saveNote);
+        document.getElementById('cancelNoteBtn').addEventListener('click', closeNoteModal);
+        resultDeleteBtn.addEventListener('click', () => { if (currentSearchIp) deleteIp(currentSearchIp); });
+
+        numberList.addEventListener('click', e => {
+            const li = e.target.closest('li[data-ip]');
+            if (!li) return;
+            const ip = li.dataset.ip;
+            const actionBtn = e.target.closest('button[data-action]');
+            if (!actionBtn) return;
+
+            e.stopPropagation();
+            const action = actionBtn.dataset.action;
+            if (action === 'complete') completeTask(ip);
+            else if (action === 'note') openNoteModal(ip);
+            else if (action === 'delete') deleteIp(ip);
+            else if (action === 'stop') stopTimer(ip);
+            else if (action === 'reset') resetTimer(ip);
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                stopMasterTimer();
+            } else {
+                if (hasAnyRunning()) {
+                    startMasterTimer();
+                    masterTick();
+                }
+            }
+        });
+
+        window.addEventListener('beforeunload', () => {
+            persistLocal();
+            // محاولة حفظ أخير في Firebase (قد لا تكتمل دائماً)
+            if (firebaseReady && db) {
+                try {
+                    const timersData = {};
+                    for (const ip in timers) {
+                        const t = timers[ip];
+                        timersData[ip] = {
+                            startTime: t.startTime,
+                            duration: t.duration,
+                            isRunning: t.isRunning,
+                            pausedSeconds: t.pausedSeconds
+                        };
+                    }
+                    db.collection(COLLECTION).doc(DOC_ID).set({
+                        numbers: numbers,
+                        timers: timersData
+                    }, { merge: true });
+                } catch(e) {}
+            }
+        });
+
+    })();
+    </script>
+</body>
+</html>
