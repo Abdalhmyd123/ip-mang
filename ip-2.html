@@ -317,22 +317,6 @@
             padding-top: 10px;
         }
 
-        /* حالة الاتصال بـ Firebase */
-        .sync-status {
-            position: fixed; top: 10px; left: 10px;
-            font-size: 12px; padding: 4px 10px;
-            border-radius: 20px; background: rgba(0,0,0,0.5);
-            color: #88aacc; z-index: 2000;
-            display: flex; align-items: center; gap: 6px;
-        }
-        .sync-status .dot {
-            width: 8px; height: 8px; border-radius: 50%;
-            background: #ff6b6b; transition: background 0.3s;
-        }
-        .sync-status.online .dot { background: #7ecf9c; }
-        .sync-status.syncing .dot { background: #ffb84d; animation: pulse 1s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
         @media (max-width: 480px) {
             .button-group button { font-size: 14px; padding: 10px 12px; min-width: 70px; }
             .input-wrapper input { font-size: 16px; }
@@ -348,12 +332,6 @@
     </style>
 </head>
 <body>
-
-    <!-- مؤشر حالة المزامنة -->
-    <div class="sync-status" id="syncStatus">
-        <span class="dot"></span>
-        <span id="syncText">جاري الاتصال...</span>
-    </div>
 
     <h1>IP Manager</h1>
 
@@ -397,56 +375,10 @@
         <footer>copypeast@Abdalhmydawad</footer>
     </div>
 
-    <!-- Firebase SDK (compat) -->
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-
     <script>
     (function() {
         "use strict";
 
-        // ============================================================
-        // 1) إعداد Firebase (استبدل القيم ببيانات مشروعك)
-        // ============================================================
-        const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "YOUR_SENDER_ID",
-            appId: "YOUR_APP_ID"
-        };
-
-        let db = null;
-        let firebaseReady = false;
-        let unsubscribeSnapshot = null;
-
-        const syncStatus = document.getElementById('syncStatus');
-        const syncText   = document.getElementById('syncText');
-
-        function setSyncState(state, text) {
-            syncStatus.classList.remove('online', 'syncing');
-            if (state) syncStatus.classList.add(state);
-            syncText.textContent = text;
-        }
-
-        try {
-            firebase.initializeApp(firebaseConfig);
-            db = firebase.firestore();
-            firebaseReady = true;
-            setSyncState('syncing', 'متصل - جاري المزامنة');
-        } catch (e) {
-            console.error('Firebase init error:', e);
-            setSyncState(null, 'وضع محلي (Firebase غير مهيأ)');
-        }
-
-        // مرجع المجموعة في Firestore
-        const COLLECTION = 'ip_manager';
-        const DOC_ID = 'shared_state';
-
-        // ============================================================
-        // 2) عناصر DOM
-        // ============================================================
         const numberList    = document.getElementById('numberList');
         const numberInput   = document.getElementById('numberInput');
         const errorMsg      = document.getElementById('errorMsg');
@@ -462,17 +394,16 @@
         const groupCounter  = document.getElementById('groupCounter');
         const clearInput    = document.getElementById('clearInput');
 
-        const TIMER_DURATION = 7200; // ثانيتين (كما في الكود الأصلي - على الأرجح تقصد ساعتين = 7200)
+        const TIMER_DURATION = 7200; // ثانيتين
 
         let numbers = [];
-        let timers = {};
+        let timers = {}; // { ip: { startTime, duration, isRunning, pausedSeconds } }
         let editingIp = null;
         let currentSearchIp = null;
 
-        // ============================================================
-        // 3) المؤقت المركزي
-        // ============================================================
+        // ====== المؤقت المركزي ======
         let masterInterval = null;
+        let lastRenderedIps = [];
 
         function startMasterTimer() {
             if (masterInterval) return;
@@ -502,6 +433,7 @@
                 const elapsed = Math.floor((now - t.startTime) / 1000);
                 const remaining = Math.max(0, t.duration - elapsed);
 
+                // تحديث الوقت المتبقي فقط عند الحاجة
                 if (remaining !== t.pausedSeconds) {
                     t.pausedSeconds = remaining;
                 }
@@ -520,6 +452,7 @@
             if (needsRender) scheduleSave();
         }
 
+        // ====== حساب الوقت المتبقي ======
         function getRemaining(ip) {
             const t = timers[ip];
             if (!t) return TIMER_DURATION;
@@ -557,28 +490,30 @@
             return 'rgba(200, 60, 60, 0.25)';
         }
 
-        // ============================================================
-        // 4) الحفظ (محلي + Firebase)
-        // ============================================================
+        // ====== الحفظ المؤجل ======
         let saveScheduled = false;
-        let firebaseSaveScheduled = false;
-
         function scheduleSave() {
             if (saveScheduled) return;
             saveScheduled = true;
             setTimeout(() => {
-                persistLocal();
-                scheduleFirebaseSave();
+                localStorage.setItem('savedNumbers', JSON.stringify(numbers));
+                const timersData = {};
+                for (const ip in timers) {
+                    const t = timers[ip];
+                    timersData[ip] = {
+                        startTime: t.startTime,
+                        duration: t.duration,
+                        isRunning: t.isRunning,
+                        pausedSeconds: t.pausedSeconds
+                    };
+                }
+                localStorage.setItem('timerStates', JSON.stringify(timersData));
                 saveScheduled = false;
             }, 5000);
         }
 
+        // حفظ فوري عند الأحداث الحرجة
         function saveImmediate() {
-            persistLocal();
-            scheduleFirebaseSave(true);
-        }
-
-        function persistLocal() {
             localStorage.setItem('savedNumbers', JSON.stringify(numbers));
             const timersData = {};
             for (const ip in timers) {
@@ -593,108 +528,7 @@
             localStorage.setItem('timerStates', JSON.stringify(timersData));
         }
 
-        // حفظ في Firebase (مع تأجيل بسيط لتقليل الطلبات)
-        function scheduleFirebaseSave(immediate = false) {
-            if (!firebaseReady || !db) return;
-            if (firebaseSaveScheduled && !immediate) return;
-            firebaseSaveScheduled = true;
-
-            const delay = immediate ? 0 : 1500;
-            setTimeout(async () => {
-                firebaseSaveScheduled = false;
-                try {
-                    setSyncState('syncing', 'جاري الحفظ...');
-                    const timersData = {};
-                    for (const ip in timers) {
-                        const t = timers[ip];
-                        timersData[ip] = {
-                            startTime: t.startTime,
-                            duration: t.duration,
-                            isRunning: t.isRunning,
-                            pausedSeconds: t.pausedSeconds
-                        };
-                    }
-                    await db.collection(COLLECTION).doc(DOC_ID).set({
-                        numbers: numbers,
-                        timers: timersData,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
-                    setSyncState('online', 'متزامن ✓');
-                } catch (e) {
-                    console.error('Firebase save error:', e);
-                    setSyncState(null, 'خطأ في المزامنة');
-                }
-            }, delay);
-        }
-
-        // ============================================================
-        // 5) الاشتراك اللحظي في Firebase (Realtime)
-        // ============================================================
-        function subscribeFirebase() {
-            if (!firebaseReady || !db) return;
-            if (unsubscribeSnapshot) unsubscribeSnapshot();
-
-            unsubscribeSnapshot = db.collection(COLLECTION).doc(DOC_ID)
-                .onSnapshot((doc) => {
-                    if (!doc.exists) {
-                        // أول مرة: ارفع البيانات المحلية إن وجدت
-                        if (numbers.length > 0) {
-                            scheduleFirebaseSave(true);
-                        }
-                        setSyncState('online', 'متزامن ✓');
-                        return;
-                    }
-                    const data = doc.data() || {};
-
-                    // تحديث القائمة
-                    if (Array.isArray(data.numbers)) {
-                        numbers = data.numbers.map(item => ({
-                            number: item.number,
-                            completed: !!item.completed,
-                            note: item.note || "",
-                            timestamp: item.timestamp || '--:--'
-                        }));
-                    }
-
-                    // تحديث المؤقتات
-                    if (data.timers && typeof data.timers === 'object') {
-                        timers = {};
-                        for (const ip in data.timers) {
-                            const st = data.timers[ip];
-                            timers[ip] = {
-                                startTime: st.startTime || Date.now(),
-                                duration: st.duration || TIMER_DURATION,
-                                isRunning: !!st.isRunning,
-                                pausedSeconds: st.pausedSeconds ?? st.duration ?? TIMER_DURATION
-                            };
-                        }
-                    }
-
-                    // ضمان وجود timer لكل IP
-                    numbers.forEach(item => {
-                        if (!timers[item.number]) {
-                            timers[item.number] = {
-                                startTime: Date.now(),
-                                duration: TIMER_DURATION,
-                                isRunning: !item.completed,
-                                pausedSeconds: TIMER_DURATION
-                            };
-                        }
-                    });
-
-                    renderList();
-                    if (hasAnyRunning()) startMasterTimer();
-                    if (currentSearchIp) showSearchResult(currentSearchIp);
-                    setSyncState('online', 'متزامن ✓');
-                }, (err) => {
-                    console.error('Firebase snapshot error:', err);
-                    setSyncState(null, 'انقطع الاتصال');
-                });
-        }
-
-        // ============================================================
-        // 6) التنبيه
-        // ============================================================
+        // ====== التنبيه ======
         function showCustomAlert(ip) {
             const overlay = document.createElement('div');
             overlay.className = 'custom-alert-overlay';
@@ -724,11 +558,8 @@
             showCustomAlert(ip);
         }
 
-        // ============================================================
-        // 7) التحميل الأولي
-        // ============================================================
+        // ====== التحميل ======
         window.addEventListener('load', () => {
-            // تحميل محلي أولاً (سريع)
             try {
                 const saved = JSON.parse(localStorage.getItem('savedNumbers') || '[]');
                 numbers = saved.map(item => ({
@@ -752,6 +583,7 @@
                 }
             } catch(e) { timers = {}; }
 
+            // مزامنة الـ timers مع القائمة
             numbers.forEach(item => {
                 if (!timers[item.number]) {
                     timers[item.number] = {
@@ -766,20 +598,15 @@
             renderList();
             updateGroupCounter();
             if (hasAnyRunning()) startMasterTimer();
-
-            // ثم الاشتراك في Firebase (سيحدّث البيانات إن وُجدت)
-            subscribeFirebase();
         });
 
-        // ============================================================
-        // 8) تحديث الواجهة
-        // ============================================================
+        // ====== التحديث الجزئي للمؤقتات ======
         function updateTimersUI() {
             const items = numberList.querySelectorAll('li[data-ip]');
             items.forEach(li => {
                 const ip = li.dataset.ip;
                 const t = timers[ip];
-                if (!t || (t.isRunning === false && !li.querySelector('.item-timer'))) return;
+                if (!t || t.isRunning === false && !li.querySelector('.item-timer')) return;
 
                 const remaining = getRemaining(ip);
                 const timerEl = li.querySelector('.item-timer span');
@@ -808,9 +635,7 @@
             resultTimer.style.color = getTimerColor(remaining);
         }
 
-        // ============================================================
-        // 9) العمليات
-        // ============================================================
+        // ====== عمليات ======
         function isDuplicate(value) {
             return numbers.some(item => item.number === value);
         }
@@ -903,9 +728,7 @@
             if (!hasAnyRunning()) stopMasterTimer();
         }
 
-        // ============================================================
-        // 10) القائمة
-        // ============================================================
+        // ====== القائمة ======
         function renderList() {
             const sorted = [...numbers].sort((a, b) => {
                 if (a.completed && !b.completed) return 1;
@@ -918,6 +741,7 @@
             sorted.forEach(item => {
                 const li = document.createElement('li');
                 li.dataset.ip = item.number;
+                li.dataset.actions = "1";
 
                 if (item.completed) {
                     li.style.background = 'rgba(45, 106, 79, 0.2)';
@@ -977,6 +801,7 @@
 
                 mainDiv.appendChild(leftDiv);
 
+                // أزرار الإجراءات
                 const actionsDiv = document.createElement('div');
                 actionsDiv.className = 'list-actions';
 
@@ -1046,15 +871,14 @@
 
             numberList.replaceChildren(fragment);
             updateGroupCounter();
+            lastRenderedIps = sorted.map(n => n.number);
         }
 
         function updateGroupCounter() {
             groupCounter.textContent = numbers.length;
         }
 
-        // ============================================================
-        // 11) البحث
-        // ============================================================
+        // ====== البحث ======
         function showSearchResult(ip) {
             const item = numbers.find(n => n.number === ip);
             if (!item) { hideSearchResult(); return; }
@@ -1100,9 +924,7 @@
             }
         }
 
-        // ============================================================
-        // 12) النافذة المنبثقة للملاحظة
-        // ============================================================
+        // ====== النافذة المنبثقة ======
         function openNoteModal(ip) {
             editingIp = ip;
             document.getElementById('noteIpDisplay').textContent = ip;
@@ -1130,10 +952,8 @@
             closeNoteModal();
         }
 
-        // ============================================================
-        // 13) إعادة التحميل
-        // ============================================================
-        async function reloadPage() {
+        // ====== إعادة التحميل ======
+        function reloadPage() {
             if (!confirm("⚠️ هل أنت متأكد أنك تريد حذف كل الـ IP وإعادة التحميل؟")) return;
             stopMasterTimer();
             timers = {};
@@ -1145,27 +965,9 @@
             statusIcon.textContent = '';
             errorMsg.classList.add('hidden');
             hideSearchResult();
-
-            // حذف من Firebase أيضاً
-            if (firebaseReady && db) {
-                try {
-                    setSyncState('syncing', 'جاري الحذف...');
-                    await db.collection(COLLECTION).doc(DOC_ID).set({
-                        numbers: [],
-                        timers: {},
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    });
-                    setSyncState('online', 'تم الحذف ✓');
-                } catch (e) {
-                    console.error('Firebase reload error:', e);
-                    setSyncState(null, 'خطأ في الحذف');
-                }
-            }
         }
 
-        // ============================================================
-        // 14) ربط الأحداث
-        // ============================================================
+        // ====== ربط الأحداث ======
         document.getElementById('addBtn').addEventListener('click', addNumber);
         document.getElementById('searchBtn').addEventListener('click', () => {
             const v = numberInput.value.trim();
@@ -1189,6 +991,7 @@
         document.getElementById('cancelNoteBtn').addEventListener('click', closeNoteModal);
         resultDeleteBtn.addEventListener('click', () => { if (currentSearchIp) deleteIp(currentSearchIp); });
 
+        // ====== Event Delegation للقائمة ======
         numberList.addEventListener('click', e => {
             const li = e.target.closest('li[data-ip]');
             if (!li) return;
@@ -1205,10 +1008,12 @@
             else if (action === 'reset') resetTimer(ip);
         });
 
+        // ====== إيقاف/استئناف عند إخفاء التبويب ======
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 stopMasterTimer();
             } else {
+                // مزامنة فورية عند العودة
                 if (hasAnyRunning()) {
                     startMasterTimer();
                     masterTick();
@@ -1216,28 +1021,8 @@
             }
         });
 
-        window.addEventListener('beforeunload', () => {
-            persistLocal();
-            // محاولة حفظ أخير في Firebase (قد لا تكتمل دائماً)
-            if (firebaseReady && db) {
-                try {
-                    const timersData = {};
-                    for (const ip in timers) {
-                        const t = timers[ip];
-                        timersData[ip] = {
-                            startTime: t.startTime,
-                            duration: t.duration,
-                            isRunning: t.isRunning,
-                            pausedSeconds: t.pausedSeconds
-                        };
-                    }
-                    db.collection(COLLECTION).doc(DOC_ID).set({
-                        numbers: numbers,
-                        timers: timersData
-                    }, { merge: true });
-                } catch(e) {}
-            }
-        });
+        // ====== حفظ قبل الإغلاق ======
+        window.addEventListener('beforeunload', saveImmediate);
 
     })();
     </script>
